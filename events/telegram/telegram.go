@@ -2,9 +2,10 @@ package telegram
 
 import (
 	"errors"
-	"fmt"
+
 	"my/bot/clients/telegram"
 	"my/bot/events"
+	"my/bot/lib/e"
 	"my/bot/storage"
 )
 
@@ -14,14 +15,9 @@ type Processor struct {
 	storage storage.Storage
 }
 
-/*func (p *Processor) Fetcher(limit int) ([]events.Event, error) {
-	//TODO implement me
-	panic("implement me")
-}*/
-
 type Meta struct {
 	ChatID   int
-	UserName string
+	Username string
 }
 
 var (
@@ -36,10 +32,10 @@ func New(client *telegram.Client, storage storage.Storage) *Processor {
 	}
 }
 
-func (p *Processor) Fetcher(limit int) ([]events.Event, error) {
+func (p *Processor) Fetch(limit int) ([]events.Event, error) {
 	updates, err := p.tg.Updates(p.offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("can not get events: %w", err)
+		return nil, e.Wrap("can't get events", err)
 	}
 
 	if len(updates) == 0 {
@@ -51,6 +47,7 @@ func (p *Processor) Fetcher(limit int) ([]events.Event, error) {
 	for _, u := range updates {
 		res = append(res, event(u))
 	}
+
 	p.offset = updates[len(updates)-1].ID + 1
 
 	return res, nil
@@ -61,27 +58,29 @@ func (p *Processor) Process(event events.Event) error {
 	case events.Message:
 		return p.processMessage(event)
 	default:
-		return ErrUnknownEventType
+		return e.Wrap("can't process message", ErrUnknownEventType)
 	}
 }
 
 func (p *Processor) processMessage(event events.Event) error {
 	meta, err := meta(event)
 	if err != nil {
-		return err
+		return e.Wrap("can't process message", err)
 	}
-	err = p.doCmd(event.Text, meta.ChatID, meta.UserName)
-	if err != nil {
-		return fmt.Errorf("can not processor message: %w", err)
+
+	if err := p.doCmd(event.Text, meta.ChatID, meta.Username); err != nil {
+		return e.Wrap("can't process message", err)
 	}
+
 	return nil
 }
 
 func meta(event events.Event) (Meta, error) {
 	res, ok := event.Meta.(Meta)
 	if !ok {
-		return Meta{}, ErrUnknownMetaType
+		return Meta{}, e.Wrap("can't get meta", ErrUnknownMetaType)
 	}
+
 	return res, nil
 }
 
@@ -96,9 +95,10 @@ func event(upd telegram.Update) events.Event {
 	if updType == events.Message {
 		res.Meta = Meta{
 			ChatID:   upd.Message.Chat.ID,
-			UserName: upd.Message.From.Username,
+			Username: upd.Message.From.Username,
 		}
 	}
+
 	return res
 }
 
@@ -106,6 +106,7 @@ func fetchText(upd telegram.Update) string {
 	if upd.Message == nil {
 		return ""
 	}
+
 	return upd.Message.Text
 }
 
@@ -113,5 +114,6 @@ func fetchType(upd telegram.Update) events.Type {
 	if upd.Message == nil {
 		return events.Unknown
 	}
+
 	return events.Message
 }

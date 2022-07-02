@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"my/bot/lib/e"
 )
 
 type Storage interface {
@@ -14,7 +16,7 @@ type Storage interface {
 	IsExists(p *Page) (bool, error)
 }
 
-var ErrNoSavedPages = errors.New("no saved page")
+var ErrNoSavedPages = errors.New("no saved pages")
 
 type Page struct {
 	URL      string
@@ -24,14 +26,13 @@ type Page struct {
 func (p Page) Hash() (string, error) {
 	h := sha1.New()
 
-	_, err := io.WriteString(h, p.URL)
-	if err != nil {
-		return "", fmt.Errorf("can not calculate hash: %w", err)
+	if _, err := io.WriteString(h, p.URL); err != nil {
+		return "", e.Wrap("can't calculate hash", err)
 	}
 
-	_, err = io.WriteString(h, p.UserName)
-	if err != nil {
-		return "", fmt.Errorf("can not calculate hash: %w", err)
+	if _, err := io.WriteString(h, p.UserName); err != nil {
+		return "", e.Wrap("can't calculate hash", err)
 	}
+
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
